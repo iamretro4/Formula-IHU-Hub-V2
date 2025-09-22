@@ -1,0 +1,218 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  image         String?
+  role          UserRole  @default(TEAM_USER)
+  passwordHash  String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  // Relations
+  teams         Team[]    @relation("TeamOwners")
+  comments      Comment[]
+  scrutineerings Scrutineering[] @relation("ScrutineerAssignments")
+  uploadedFiles File[]    @relation("FileUploads")
+  notifications Notification[]
+
+  @@map("users")
+}
+
+enum UserRole {
+  ADMIN
+  JUDGE
+  SCRUTINEER
+  TEAM_USER
+  VIEWER
+}
+
+model Team {
+  id            String     @id @default(cuid())
+  name          String
+  country       String?
+  contactEmail  String
+  contactPhone  String?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  status        TeamStatus @default(PENDING)
+  
+  // Relations
+  members       User[]     @relation("TeamOwners")
+  vehicles      Vehicle[]
+  comments      Comment[]  @relation("TeamComments")
+
+  @@map("teams")
+}
+
+enum TeamStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model Vehicle {
+  id             String    @id @default(cuid())
+  teamId         String
+  name           String
+  type           String
+  chassisNumber  String?
+  batterySpec    Json?
+  year           Int?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  status         VehicleStatus @default(PENDING)
+  
+  // Relations
+  team           Team      @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  scrutineerings Scrutineering[]
+  documents      File[]    @relation("VehicleDocuments")
+  comments       Comment[] @relation("VehicleComments")
+
+  @@map("vehicles")
+}
+
+enum VehicleStatus {
+  PENDING
+  PASSED
+  FAILED
+}
+
+model Scrutineering {
+  id            String     @id @default(cuid())
+  vehicleId     String
+  scheduledAt   DateTime
+  location      String?
+  scrutineerId  String?
+  overallResult ScrutineeringResult @default(PENDING)
+  notes         String?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  startedAt     DateTime?
+  completedAt   DateTime?
+  
+  // Relations
+  vehicle       Vehicle    @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  scrutineer    User?      @relation("ScrutineerAssignments", fields: [scrutineerId], references: [id])
+  items         ScrutineerItem[]
+  comments      Comment[]  @relation("ScrutineeringComments")
+
+  @@map("scrutineerings")
+}
+
+enum ScrutineeringResult {
+  PENDING
+  IN_PROGRESS
+  PASS
+  FAIL
+}
+
+model ScrutineerItem {
+  id              String   @id @default(cuid())
+  scrutineeringId String
+  key             String
+  label           String
+  description     String?
+  category        String   @default("General")
+  value           String?
+  status          ItemStatus   @default(UNKNOWN)
+  remarks         String?
+  requiredEvidence Boolean @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  // Relations
+  scrutineering   Scrutineering @relation(fields: [scrutineeringId], references: [id], onDelete: Cascade)
+  evidence        File[]   @relation("ItemEvidence")
+
+  @@map("scrutineer_items")
+}
+
+enum ItemStatus {
+  UNKNOWN
+  PASS
+  FAIL
+}
+
+model File {
+  id         String   @id @default(cuid())
+  url        String
+  name       String
+  size       Int?
+  mimeType   String?
+  uploadedById String?
+  createdAt  DateTime @default(now())
+  
+  // Relations - flexible file associations
+  uploadedBy User?    @relation("FileUploads", fields: [uploadedById], references: [id])
+  vehicle    Vehicle? @relation("VehicleDocuments", fields: [vehicleId], references: [id])
+  vehicleId  String?
+  scrutineerItem ScrutineerItem? @relation("ItemEvidence", fields: [scrutineerItemId], references: [id])
+  scrutineerItemId String?
+
+  @@map("files")
+}
+ 
+model Comment {
+  id         String   @id @default(cuid())
+  authorId   String
+  text       String
+  createdAt  DateTime @default(now())
+  
+  // Relations - flexible comment associations
+  author     User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  vehicle    Vehicle? @relation("VehicleComments", fields: [vehicleId], references: [id])
+  vehicleId  String?
+  team       Team?    @relation("TeamComments", fields: [teamId], references: [id])
+  teamId     String?
+  scrutineering Scrutineering? @relation("ScrutineeringComments", fields: [scrutineeringId], references: [id])
+  scrutineeringId String?
+
+  @@map("comments")
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String
+  message   String
+  type      NotificationType @default(INFO)
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  
+  // Relations
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
+
+enum NotificationType {
+  INFO
+  SUCCESS
+  WARNING
+  ERROR
+}
+
+// Default scrutineering checklist template
+model ChecklistTemplate {
+  id          String  @id @default(cuid())
+  key         String  @unique
+  label       String
+  description String?
+  category    String
+  required    Boolean @default(true)
+  requiresEvidence Boolean @default(false)
+  order       Int     @default(0)
+  active      Boolean @default(true)
+  createdAt   DateTime @default(now())
+
+  @@map("checklist_templates")
+}
