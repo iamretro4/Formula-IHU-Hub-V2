@@ -1,18 +1,21 @@
-// components/Sidebar.tsx
 'use client'
-
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import {
+  FaTachometerAlt, FaTrophy, FaCalendarAlt, FaCheckCircle, FaList,
+  FaTasks, FaChartBar, FaClipboardCheck, FaUser, FaSignOutAlt, FaCogs,
+  FaUsers, FaGavel, FaBook, FaHistory, FaUsersCog, FaCommentDots
+} from 'react-icons/fa'
 
 type NavSection = {
   label: string
   items: {
-    label: string
-    href: string
-    icon: React.ReactNode
-    roles?: string[] // restrict to specific roles
+    label: string,
+    href: string,
+    icon: React.ReactNode,
+    roles?: string[]
   }[]
 }
 
@@ -20,53 +23,59 @@ const navConfig: NavSection[] = [
   {
     label: '',
     items: [
-      { label: 'Dashboard', href: '/dashboard', icon: <span className="material-icons">dashboard</span> },
-      { label: 'Results', href: '/results', icon: <span className="material-icons">leaderboard</span> },
+      { label: 'Dashboard', href: '/dashboard', icon: <FaTachometerAlt /> },
+      { label: 'Results', href: '/results', icon: <FaTrophy /> }
     ]
   },
   {
     label: 'SCRUTINEERING',
     items: [
-      { label: 'Calendar', href: '/scrutineering/calendar', icon: <span className="material-icons">calendar_today</span> },
-      { label: 'Book Inspection', href: '/scrutineering/book', icon: <span className="material-icons">event</span> },
-      { label: 'Live Inspections', href: '/scrutineering/live', icon: <span className="material-icons">checklist</span> },
+      { label: 'Calendar', href: '/scrutineering/calendar', icon: <FaCalendarAlt /> },
+      { label: 'Book Inspection', href: '/scrutineering/book', icon: <FaCheckCircle /> },
+      { label: 'Live Inspections', href: '/scrutineering/live', icon: <FaList /> }
     ]
   },
   {
     label: 'TRACK EVENTS',
     items: [
-      { label: 'Track Marshal', href: '/track/marshal', icon: <span className="material-icons">timer</span> },
-      { label: 'Live Track Data', href: '/track/data', icon: <span className="material-icons">show_chart</span> },
+      { label: 'Track Marshal', href: '/track/marshal', icon: <FaTasks /> },
+      { label: 'Live Track Data', href: '/track/data', icon: <FaChartBar /> }
     ]
   },
-  {
-    label: 'JUDGED EVENTS',
-    items: [
-      { label: 'Design Event', href: '/judged/design', icon: <span className="material-icons">emoji_objects</span> },
-      { label: 'Business Plan', href: '/judged/business', icon: <span className="material-icons">domain</span> },
-      { label: 'Cost & Manufacturing', href: '/judged/cost', icon: <span className="material-icons">request_quote</span> },
-    ]
-  },
+ {
+  label: 'JUDGED EVENTS',
+  items: [
+    { label: 'Design Leaderboard', href: '/judged-events/engineering-design/results', icon: <FaBook /> },
+    { label: 'Business Plan Leaderboard', href: '/judged-events/business-plan/results', icon: <FaCogs /> },
+    { label: 'Cost & Manufacturing Leaderboard', href: '/judged-events/cost-manufacturing/results', icon: <FaHistory /> },
+    { label: 'Multi-Event Summary', href: '/judged-events/summary', icon: <FaChartBar /> },
+    { label: 'Design Admin', href: '/judged-events/engineering-design/admin', icon: <FaUsersCog />, roles: ['admin'] },
+    { label: 'Business Admin', href: '/judged-events/business-plan/admin', icon: <FaUsersCog />, roles: ['admin'] },
+    { label: 'Cost Admin', href: '/judged-events/cost-manufacturing/admin', icon: <FaUsersCog />, roles: ['admin'] },
+    { label: 'Advanced Admin Panel', href: '/judged-events/engineering-design/admin/advanced', icon: <FaGavel />, roles: ['admin'] },
+    // Add similar links for other event advanced panels if needed
+  ]
+},
   {
     label: 'TEAM FEATURES',
     items: [
-      { label: 'Feedback Booking', href: '/team/feedback', icon: <span className="material-icons">feedback</span> },
+      { label: 'Feedback Booking', href: '/team/feedback', icon: <FaCommentDots /> }
     ]
   },
   {
     label: 'ADMINISTRATION',
     items: [
-      { label: 'Admin Panel', href: '/admin', icon: <span className="material-icons">admin_panel_settings</span>, roles: ['admin'] },
-      { label: 'User Management', href: '/admin/users', icon: <span className="material-icons">group</span>, roles: ['admin'] },
-      { label: 'System Reports', href: '/admin/reports', icon: <span className="material-icons">description</span>, roles: ['admin', 'scrutineer'] },
-      { label: 'Penalty Management', href: '/admin/penalties', icon: <span className="material-icons">gavel</span>, roles: ['admin', 'scrutineer'] },
+      { label: 'Admin Panel', href: '/admin', icon: <FaUsersCog />, roles: ['admin'] },
+      { label: 'User Management', href: '/admin/users', icon: <FaUsers />, roles: ['admin'] },
+      { label: 'System Reports', href: '/admin/reports', icon: <FaClipboardCheck />, roles: ['admin', 'scrutineer'] },
+      { label: 'Penalty Management', href: '/admin/penalties', icon: <FaGavel />, roles: ['admin', 'scrutineer'] }
     ]
   },
   {
     label: 'ACCOUNT',
     items: [
-      { label: 'My Profile', href: '/settings/profile', icon: <span className="material-icons">person</span> },
-      { label: 'Logout', href: '/logout', icon: <span className="material-icons">logout</span> }
+      { label: 'My Profile', href: '/account/profile', icon: <FaUser /> },
+      { label: 'Logout', href: '/account/logout', icon: <FaSignOutAlt /> }
     ]
   }
 ]
@@ -76,7 +85,6 @@ export default function Sidebar() {
   const [role, setRole] = useState<string | null>(null)
   const [profile, setProfile] = useState<any>(null)
   const supabase = createClientComponentClient()
-
   useEffect(() => {
     let active = true
     ;(async () => {
@@ -95,7 +103,6 @@ export default function Sidebar() {
     })()
     return () => { active = false }
   }, [supabase])
-
   return (
     <aside className="h-full w-64 flex-shrink-0 border-r bg-white dark:bg-neutral-900 flex flex-col">
       <div className="px-6 py-5 flex items-center gap-2 border-b">
@@ -117,7 +124,8 @@ export default function Sidebar() {
                     <Link
                       href={item.href}
                       className={`flex items-center gap-2 rounded px-3 py-2 text-sm font-medium transition hover:bg-gray-100 dark:hover:bg-neutral-800 ${pathname.startsWith(item.href) ? 'bg-gray-100 dark:bg-neutral-900' : ''}`}>
-                      {item.icon}{item.label}
+                      <span className="text-lg">{item.icon}</span>
+                      <span>{item.label}</span>
                     </Link>
                   </li>
                 ))}

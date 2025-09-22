@@ -27,9 +27,9 @@ import {
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Textarea } from '@/components/ui/textarea'
 import { z } from 'zod'
-import { supabase } from '@/lib/supabase/client'
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
+const supabase = createClientComponentClient();
 import { Database } from '@/lib/types/database'
-
 // -- Validation: teamId required as UUID --
 const profileCompletionSchema = z.object({
   teamId: z
@@ -39,7 +39,6 @@ const profileCompletionSchema = z.object({
 })
 type ProfileCompletionData = z.infer<typeof profileCompletionSchema>
 type Team = Database['public']['Tables']['teams']['Row']
-
 export default function CompleteProfilePage() {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
@@ -54,7 +53,6 @@ export default function CompleteProfilePage() {
   } = useForm<ProfileCompletionData>({
     resolver: zodResolver(profileCompletionSchema),
   })
-
   // Load user, teams, and profile status (no auto-complete until actually submitted!)
   useEffect(() => {
     const loadData = async () => {
@@ -91,7 +89,6 @@ export default function CompleteProfilePage() {
     loadData()
     // eslint-disable-next-line
   }, [])
-
   const onSubmit = async (data: ProfileCompletionData) => {
     if (!currentUser) return
     setIsLoading(true)
@@ -117,7 +114,6 @@ export default function CompleteProfilePage() {
       setIsLoading(false)
     }
   }
-
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 py-12 px-4 sm:px-6 lg:px-8">
       <Card className="w-full max-w-lg mx-auto">

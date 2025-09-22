@@ -10,7 +10,6 @@ import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Eye, EyeOff, Loader2 } from 'lucide-react'
-
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -18,9 +17,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-
 import { registerSchema, type RegisterFormData } from '@/lib/validations/auth'
-import { supabase } from '@/lib/supabase/client'
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
+const supabase = createClientComponentClient();
 import { formatUserRole } from '@/lib/utils/formatting'
 
 export function RegisterForm() {
@@ -28,7 +27,6 @@ export function RegisterForm() {
   const [isLoading, setIsLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState<string | null>(null)
-
   const {
     register,
     handleSubmit,
@@ -43,11 +41,9 @@ export function RegisterForm() {
       role: 'viewer',
     },
   })
-
   const onSubmit = async (data: RegisterFormData) => {
     setIsLoading(true)
     setError(null)
-
     try {
       const { error: signUpError } = await supabase.auth.signUp({
         email: data.email,
@@ -65,13 +61,10 @@ export function RegisterForm() {
           },
         },
       })
-
       if (signUpError) {
         setError(signUpError.message)
         return
       }
-
-      // Redirect to complete profile page
       router.push('/complete-profile')
     } catch (err) {
       setError('An unexpected error occurred. Please try again.')
@@ -80,7 +73,6 @@ export function RegisterForm() {
       setIsLoading(false)
     }
   }
-
   const userRoles = [
     'admin',
     'scrutineer',
@@ -96,7 +88,6 @@ export function RegisterForm() {
     'track_marshal',
     'viewer',
   ] as const
-
   return (
     <Card className="w-full max-w-2xl mx-auto">
       <CardHeader className="text-center">
@@ -113,7 +104,6 @@ export function RegisterForm() {
               <AlertDescription>{error}</AlertDescription>
             </Alert>
           )}
-
           {/* Email and Password Row */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
@@ -128,7 +118,6 @@ export function RegisterForm() {
                 <p className="text-sm text-red-600">{errors.email.message}</p>
               )}
             </div>
-
             <div className="space-y-2">
               <Label htmlFor="password">Password *</Label>
               <div className="relative">
@@ -157,7 +146,6 @@ export function RegisterForm() {
               )}
             </div>
           </div>
-
           {/* Confirm Password */}
           <div className="space-y-2">
             <Label htmlFor="confirmPassword">Confirm Password *</Label>
@@ -171,7 +159,6 @@ export function RegisterForm() {
               <p className="text-sm text-red-600">{errors.confirmPassword.message}</p>
             )}
           </div>
-
           {/* Personal Information */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-2">
@@ -185,7 +172,6 @@ export function RegisterForm() {
                 <p className="text-sm text-red-600">{errors.firstName.message}</p>
               )}
             </div>
-
             <div className="space-y-2">
               <Label htmlFor="lastName">Last Name *</Label>
               <Input
@@ -197,7 +183,6 @@ export function RegisterForm() {
                 <p className="text-sm text-red-600">{errors.lastName.message}</p>
               )}
             </div>
-
             <div className="space-y-2">
               <Label htmlFor="fatherName">Father's Name *</Label>
               <Input
@@ -210,7 +195,6 @@ export function RegisterForm() {
               )}
             </div>
           </div>
-
           {/* Contact Information */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
@@ -224,7 +208,6 @@ export function RegisterForm() {
                 <p className="text-sm text-red-600">{errors.phone.message}</p>
               )}
             </div>
-
             <div className="space-y-2">
               <Label htmlFor="emergencyContact">Emergency Contact *</Label>
               <Input
@@ -237,7 +220,6 @@ export function RegisterForm() {
               )}
             </div>
           </div>
-
           {/* EHIC and Role */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
@@ -251,7 +233,6 @@ export function RegisterForm() {
                 <p className="text-sm text-red-600">{errors.ehicNumber.message}</p>
               )}
             </div>
-
             <div className="space-y-2">
               <Label htmlFor="role">Role *</Label>
               <Select onValueChange={(value) => setValue('role', value as any)}>
@@ -271,7 +252,6 @@ export function RegisterForm() {
               )}
             </div>
           </div>
-
           {/* Campsite Staying Checkbox */}
           <div className="flex items-center space-x-2">
             <Checkbox 
@@ -283,7 +263,6 @@ export function RegisterForm() {
               I will be staying at the official campsite
             </Label>
           </div>
-
           <Button type="submit" className="w-full" disabled={isLoading}>
             {isLoading ? (
               <>
@@ -296,7 +275,6 @@ export function RegisterForm() {
           </Button>
         </form>
       </CardContent>
-
       <CardFooter className="text-center">
         <p className="text-sm text-muted-foreground">
           Already have an account?{' '}

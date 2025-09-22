@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import Sidebar from "@/components/Sidebar";
-import { SupabaseProvider } from "@supabase/auth-helpers-react"; // Import the provider!
 import "./globals.css";
 
 const geistSans = Geist({
@@ -26,10 +25,8 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased flex min-h-screen bg-neutral-50 dark:bg-neutral-950`}
       >
-        <SupabaseProvider> {/* Wrap everything in the provider */}
           <Sidebar />
           <main className="flex-1 min-h-screen">{children}</main>
-        </SupabaseProvider>
       </body>
     </html>
   );

@@ -1,122 +1,159 @@
 'use client'
-console.log('SCRUTINEERING CALENDAR COMPONENT MOUNTED');
-
-// =====================================================
-// Formula IHU Hub - Scrutineering Calendar Page
-// File: src/app/scrutineering/calendar/page.tsx
-// =====================================================
-
-
 import { useEffect, useState } from 'react'
 import { Badge } from '@/components/ui/badge'
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import Link from 'next/link'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 
-// Map status to color
-const statusColor: Record<string, string> = {
-  'upcoming': 'bg-blue-100 text-blue-700 border-blue-400',
-  'ongoing': 'bg-yellow-100 text-yellow-800 border-yellow-400',
-  'completed': 'bg-green-100 text-green-900 border-green-400',
-  'cancelled': 'bg-gray-100 text-gray-500 border-gray-400',
-  'no_show': 'bg-red-50 text-red-700 border-red-400'
+function getSlots(startTime, endTime, duration) {
+  const slots = []
+  let [h, m] = startTime.split(':').map(Number)
+  let end = parseInt(endTime.split(':')[0]) * 60 + parseInt(endTime.split(':')[1])
+  let minutes = h * 60 + m
+  while (minutes + duration <= end) {
+    let hours = String(Math.floor(minutes / 60)).padStart(2, '0')
+    let mins = String(minutes % 60).padStart(2, '0')
+    slots.push(`${hours}:${mins}`)
+    minutes += duration
+  }
+  return slots
 }
 
-type BookingRow = {
-  id: string
-  inspection_type: { name: string }
-  date: string
-  start_time: string
-  end_time: string
-  status: string
-  resource_index: number
-}
-
-export default function ScrutineeringCalendarPage() {
-  const [rows, setRows] = useState<BookingRow[]>([])
-  const [teamId, setTeamId] = useState<string | null>(null)
+export default function ScrutineeringCalendarGrid() {
+  const [inspectionTypes, setInspectionTypes] = useState([])
+  const [allBookings, setAllBookings] = useState([])
+  const [userRole, setUserRole] = useState('')
+  const [teamId, setTeamId] = useState(null)
+  const [today, setToday] = useState(() => new Date().toISOString().split('T')[0])
   const supabase = createClientComponentClient()
 
   useEffect(() => {
-  console.log('Effect running in Scrutineering Calendar');
     let active = true
     ;(async () => {
-  console.log('Async useEffect inner executing');
-      // Get logged-in user's team id
+      // Get current user + profile (role/team)
       const { data: { user } } = await supabase.auth.getUser()
-console.log('USER:', user); // Log user object
       if (!user || !active) return
-      const { data: profile } = await supabase.from('user_profiles').select('team_id').eq('id', user.id).single()
-console.log('PROFILE FETCHED:', profile); // Log profile object
-      if (!profile?.team_id) {
-        setTeamId(null)
-        setRows([]) // No team, so nothing to show
-        return
-      }
-
-console.log('PROFILE FETCHED:', profile);
-console.log('USER ID (from auth):', user.id);
-
-
-      setTeamId(profile.team_id)
-      // Fetch bookings for this team
-      const { data: bookings, error } = await supabase
+      const { data: profile } = await supabase
+        .from('user_profiles')
+        .select('app_role, team_id')
+        .eq('id', user.id)
+        .single()
+      setUserRole(profile?.app_role || '')
+      setTeamId(profile?.team_id || null)
+      // Inspection types
+      const { data: types } = await supabase
+        .from('inspection_types')
+        .select('id, name, duration, duration_minutes, slot_count, sort_order')
+        .order('sort_order')
+      setInspectionTypes(types ?? [])
+      // All bookings (with team+type name)
+      const { data: bookings } = await supabase
         .from('bookings')
-        .select('id, date, start_time, end_time, status, resource_index, inspection_type:inspection_types(name)')
-        .eq('team_id', profile.team_id)
-        .order('date', { ascending: true })
-        .order('start_time', { ascending: true })
-      if (!active) return
-      setRows(bookings ?? [])
+        .select(`
+          id, inspection_type_id, team_id, start_time, end_time, resource_index, status,
+          team:teams(name), inspection_type:inspection_types(name)
+        `)
+        .eq('date', today)
+      setAllBookings(bookings ?? [])
     })()
     return () => { active = false }
-  }, [supabase])
+  }, [supabase, today])
+
+  // Build grid
+  const gridByType = inspectionTypes.reduce((acc, type) => {
+    const dur = Number(type.duration ?? type.duration_minutes ?? 120)
+    acc[type.id] = getSlots('09:00', '19:00', dur).map(time => {
+      const found = allBookings.find(
+        b => b.inspection_type_id === type.id && b.start_time === time
+      )
+      return {
+        time,
+        booking: found
+      }
+    })
+    return acc
+  }, {})
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6 p-6">
-      <h1 className="text-2xl font-black mb-4">Scrutineering Calendar</h1>
-      {teamId === null ? (
-        <p className="text-red-600">No team profile found — please complete your profile.</p>
-      ) : (
-        <>
-          <div className="space-y-4">
-            {rows.length === 0 && (
-              <div className="rounded border p-8 text-center text-gray-500 bg-white dark:bg-neutral-900">
-                You have no current scrutineering bookings.
-                <div className="mt-4">
-                  <Button asChild>
-                    <Link href="/scrutineering/book">
-                      Book Inspection Slot
-                    </Link>
-                  </Button>
-                </div>
-              </div>
-            )}
-            {rows.map(b => (
-              <Card key={b.id} className="flex flex-col md:flex-row md:items-center md:justify-between p-4">
-                <CardHeader className="p-0 mb-3 md:mb-0">
-                  <CardTitle className="mb-1">{b.inspection_type?.name}</CardTitle>
-                  <div className="text-sm text-gray-500">
-                    {b.date} {b.start_time} – {b.end_time} | Lane {b.resource_index}
-                  </div>
-                </CardHeader>
-                <CardContent className="p-0 flex flex-col md:items-end gap-2">
-                  <Badge className={`px-2 py-1 border ${statusColor[(b.status as string) || 'upcoming'] ?? ''}`}>
-                    {b.status}
-                  </Badge>
-                  {/* Allow rescheduling, cancellation etc based on status/RLS in future */}
-                </CardContent>
-              </Card>
+    <div className="overflow-x-auto p-6">
+      <h1 className="text-2xl font-black mb-4">Scrutineering Day Grid ({today})</h1>
+      <div className="mb-3">
+        <input
+          type="date"
+          value={today}
+          onChange={e => setToday(e.target.value)}
+          className="border p-2 rounded"
+        />
+      </div>
+      <table className="min-w-full border-collapse border bg-white shadow">
+        <thead>
+          <tr>
+            <th className="border px-2 py-1 bg-gray-100 text-sm sticky left-0 z-10">Time Slot</th>
+            {inspectionTypes.map(type => (
+              <th key={type.id} className="border px-3 py-1 bg-gray-100 text-sm">{type.name}</th>
             ))}
+          </tr>
+        </thead>
+        <tbody>
+          {(inspectionTypes.length > 0 ?
+            gridByType[inspectionTypes[0].id].map((_, rowIdx) => (
+              <tr key={rowIdx}>
+                <td className="border px-2 py-1 bg-gray-50 font-mono sticky left-0 z-10">
+                  {gridByType[inspectionTypes[0].id][rowIdx].time}
+                </td>
+                {inspectionTypes.map(type => {
+                  const slot = gridByType[type.id][rowIdx]
+                  const isBooked = !!slot?.booking
+                  return (
+                    <td key={type.id} className="border px-3 py-2 text-center align-middle">
+                      {isBooked ? (
+                        <Badge className="bg-red-50 text-red-800 border border-red-300 whitespace-pre-line">
+                          Reserved
+                          {(userRole === 'admin' || slot.booking.team_id === teamId) && (
+                            <span className="block text-xs font-normal">
+                              {" "}
+                              {userRole === "admin"
+                                ? `(${slot.booking.team?.name ?? "Team"})`
+                                : slot.booking.team_id === teamId
+                                ? " (Your team)" : ""}
+                            </span>
+                          )}
+                        </Badge>
+                      ) : (
+                        <Badge className="bg-green-50 text-green-700 border border-green-300">
+                          Available
+                        </Badge>
+                      )}
+                    </td>
+                  )
+                })}
+              </tr>
+            )) : null
+          )}
+        </tbody>
+      </table>
+
+      {/* All booked inspections agenda */}
+      <div className="max-w-3xl mx-auto mt-10 space-y-2">
+        <h2 className="text-xl font-bold mb-3">All Booked Inspections ({today}):</h2>
+        {allBookings.length === 0 && (
+          <div className="rounded border p-8 text-center text-gray-500 bg-white dark:bg-neutral-900">
+            No bookings on this day.
           </div>
-          <div className="flex justify-end mt-4">
-            <Button asChild>
-              <Link href="/scrutineering/book">Book Another Inspection</Link>
-            </Button>
+        )}
+        {allBookings.map(b => (
+          <div key={b.id} className="border rounded-lg bg-white p-4 flex justify-between items-center shadow">
+            <div>
+              <div className="font-bold">
+                {b.inspection_type?.name ?? "Inspection"}
+                <span className="font-medium text-gray-600 ml-2">({b.team?.name})</span>
+              </div>
+              <div className="text-gray-500 text-sm">
+                {b.start_time} – {b.end_time}, Lane {b.resource_index}
+              </div>
+            </div>
+            <Badge>{b.status}</Badge>
           </div>
-        </>
-      )}
+        ))}
+      </div>
     </div>
   )
 }
