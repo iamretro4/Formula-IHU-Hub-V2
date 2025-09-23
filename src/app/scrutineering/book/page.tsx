@@ -1,10 +1,13 @@
 'use client'
-import { useForm } from 'react-hook-form'
-import { z } from 'zod'
+import { useForm, SubmitHandler } from 'react-hook-form'
+import { z } from 'zod' // Corrected import statement
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { Database } from '@/lib/types/database'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { AlertCircle, Loader2 } from 'lucide-react'
 
 const schema = z.object({
   inspection_type_id: z.string().uuid(),
@@ -14,6 +17,7 @@ const schema = z.object({
   notes: z.string().optional()
 })
 type Values = z.infer<typeof schema>
+
 type InspectionTypeCard = {
   id: string
   name: string
@@ -45,28 +49,69 @@ export default function ScrutineeringBookPage() {
   const [error, setError] = useState<string | null>(null)
   const [ok, setOk] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [initialLoading, setInitialLoading] = useState(true) // New state for initial loading
   const [selectedInspectionType, setSelectedInspectionType] = useState<InspectionTypeCard | null>(null)
   const [reservedSlots, setReservedSlots] = useState<string[]>([])
-  const supabase = createClientComponentClient()
+  const supabase = createClientComponentClient<Database>()
   const {
     register, handleSubmit, setValue, watch, formState: { errors }
-  } = useForm<Values>({ resolver: zodResolver(schema) })
+  } = useForm<Values>({ 
+    resolver: zodResolver(schema), // Simplified: ZodResolver infers types from schema
+    defaultValues: {
+      inspection_type_id: '',
+      date: new Date().toISOString().split('T')[0],
+      start_time: '',
+      resource_index: 1,
+      notes: ''
+    }
+  })
   // --- DB Load ---
   useEffect(() => {
     let active = true
     ;(async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user || !active) return
-      const { data: profile } = await supabase.from('user_profiles').select('team_id').eq('id', user.id).single()
-      if (!profile?.team_id) return
+      setInitialLoading(true); // Start initial loading
+      setError(null); // Clear previous errors
+
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      if (userError) {
+        setError(userError.message);
+        setInitialLoading(false);
+        return;
+      }
+      if (!user || !active) {
+        setInitialLoading(false);
+        return;
+      }
+
+      const { data: profile, error: profileError } = await supabase.from('user_profiles').select('team_id').eq('id', user.id).single()
+      if (profileError) {
+        setError(profileError.message);
+        setInitialLoading(false);
+        return;
+      }
+      if (!profile?.team_id) {
+        setError('No team profile found. Please complete your profile first.');
+        setInitialLoading(false);
+        return;
+      }
       setTeamId(profile.team_id)
-      const { data: types } = await supabase
+
+      const { data: types, error: typesError } = await supabase
         .from('inspection_types')
-        .select('id, name, duration, duration_minutes, slot_count, requirements, sort_order, active')
-        .order('sort_order')
+        .select('id, name, duration, duration_minutes, slot_count, requirements, sort_order, active, key')
+
+      if (typesError) {
+        console.error('Error fetching inspection types:', typesError);
+        setError(typesError.message);
+        setInitialLoading(false);
+        return;
+      }
+
+      // Deduplicate by 'name' column to ensure each distinct inspection name appears once
       const uniqueTypes = Array.from(
-        new Map((types ?? []).map(t => [t.id, t])).values()
+        new Map((types ?? []).map(t => [t.name, t])).values()
       )
+      
       setInspectionTypes(
         (uniqueTypes).map(t => ({
           id: t.id,
@@ -77,20 +122,28 @@ export default function ScrutineeringBookPage() {
           subtitle: t.requirements ? `Requires ${t.requirements}` : undefined
         }))
       )
+      setInitialLoading(false); // End initial loading
     })()
     return () => { active = false }
   }, [supabase])
 
   // When type/date changes, fetch that day's reserved slots for that type and lane
   useEffect(() => {
-    if (!selectedInspectionType) return setReservedSlots([])
-    if (!watch('date')) return setReservedSlots([])
+    if (!selectedInspectionType) {
+      setReservedSlots([])
+      return
+    }
+    const watchedDate = watch('date');
+    if (!watchedDate) {
+      setReservedSlots([])
+      return
+    }
     (async () => {
       const { data: bookings } = await supabase
         .from('bookings')
         .select('start_time')
         .eq('inspection_type_id', selectedInspectionType.id)
-        .eq('date', watch('date'))
+        .eq('date', watchedDate)
       setReservedSlots((bookings ?? []).map(b => b.start_time))
     })()
   }, [selectedInspectionType, watch('date'), supabase])
@@ -100,26 +153,58 @@ export default function ScrutineeringBookPage() {
     setValue('inspection_type_id', t.id)
     setValue('date', new Date().toISOString().split('T')[0]) // Set date as today
     setValue('resource_index', 1) // Default lane
+    setValue('start_time', ''); // Clear selected time when inspection type changes
   }
 
-  async function onSubmit(values: Values) {
+  const onSubmit: SubmitHandler<Values> = async (values) => {
     setOk(false)
     setError(null)
     setLoading(true)
-    const { error } = await supabase.from('bookings').insert({
-      team_id: teamId,
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      setError('User not authenticated.')
+      setLoading(false)
+      return;
+    }
+
+    const { error: insertError } = await supabase.from('bookings').insert({
+      team_id: teamId!,
       inspection_type_id: values.inspection_type_id,
       date: values.date,
       start_time: values.start_time,
-      end_time: values.start_time,
+      end_time: values.start_time, // Assuming end_time is same as start_time for now
       resource_index: values.resource_index,
       status: 'upcoming',
       notes: values.notes,
-      created_by: (await supabase.auth.getUser()).data.user.id
+      created_by: user.id
     })
     setLoading(false)
-    if (error) setError(error.message)
-    else setOk(true)
+    if (insertError) {
+      setError(insertError.message)
+    }
+    else {
+      setOk(true)
+    }
+  }
+
+  if (initialLoading) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <Loader2 className="h-8 w-8 animate-spin" />
+        <span className="ml-2">Loading data...</span>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="max-w-lg mx-auto p-8 text-center">
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      </div>
+    )
   }
 
   if (!teamId) {
@@ -170,7 +255,7 @@ export default function ScrutineeringBookPage() {
           <form onSubmit={handleSubmit(onSubmit)} className="mt-8">
             <label className="block font-semibold mb-2">2. Select Time Slot</label>
             <select
-              {...register('start_time')}
+              {...register('start_time')} // Corrected to register 'start_time'
               className="w-full border rounded px-3 py-2 bg-neutral-50 focus:bg-white focus:border-blue-300"
               required
             >
@@ -181,12 +266,22 @@ export default function ScrutineeringBookPage() {
                 </option>
               ))}
             </select>
+            {errors.start_time && ( // Display error for start_time
+              <p className="text-sm text-red-600 mt-1">{errors.start_time.message}</p>
+            )}
             <Button
               disabled={loading}
               type="submit"
               className="w-full mt-2 py-2 text-base font-bold rounded-lg"
             >
-              {loading ? 'Booking…' : 'Confirm Booking'}
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Booking…
+                </>
+              ) : (
+                'Confirm Booking'
+              )}
             </Button>
             <Button
               variant="outline"

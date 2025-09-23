@@ -4,14 +4,20 @@ import Link from 'next/link'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { Badge } from '@/components/ui/badge'
 import { FaPlay } from 'react-icons/fa'
+import { Database } from '@/lib/types/database'
+
+type Booking = Database['public']['Tables']['bookings']['Row'] & {
+  team?: { name: string }[] | null; // Changed to array
+  inspection_type?: { name: string }[] | null; // Changed to array
+}
 
 export default function LiveInspectionsQueue() {
-  const [bookings, setBookings] = useState([])
-  const [role, setRole] = useState('')
-  const [teamId, setTeamId] = useState(null)
+  const [bookings, setBookings] = useState<Booking[]>([])
+  const [role, setRole] = useState<string>('')
+  const [teamId, setTeamId] = useState<string | null>(null)
   const [today, setToday] = useState('')
-  const [tab, setTab] = useState('upcoming')
-  const supabase = createClientComponentClient()
+  const [tab, setTab] = useState<'upcoming' | 'ongoing'>('upcoming')
+  const supabase = createClientComponentClient<Database>()
 
   useEffect(() => {
     setToday(new Date().toISOString().split('T')[0])
@@ -37,11 +43,14 @@ export default function LiveInspectionsQueue() {
   useEffect(() => {
     if (!today) return
     let cancelled = false
-    let intervalId
+    let intervalId: NodeJS.Timeout
     async function loadQueue() {
       let query = supabase
         .from('bookings')
-        .select('*')
+        .select(`
+          id, inspection_type_id, team_id, date, start_time, end_time, resource_index, status, is_rescrutineering, priority_level, notes, created_by, created_at, updated_at, inspection_status, assigned_scrutineer_id, started_at, completed_at,
+          team:teams(name), inspection_type:inspection_types(name)
+        `)
         .eq('date', today)
         .in('status', ['upcoming', 'ongoing'])
         .order('start_time')
@@ -58,10 +67,10 @@ export default function LiveInspectionsQueue() {
 
   if (!today) return null
 
-  const byStatus = status => bookings.filter(b => b.status === status)
+  const byStatus = (statusFilter: 'upcoming' | 'ongoing') => bookings.filter(b => b.status === statusFilter)
 
   // Optional: mapping for type/teamIDs to known names
-const knownInspectionTypes = {
+const knownInspectionTypes: Record<string, string> = {
   '8d226f72-d860-4950-a6b4-f6871ad6f8bd': 'Pre-Inspection',
   '4bdabce0-bdcc-41a9-a671-fc640b55e8d0': 'Mechanical',
   'bc71e416-e3cb-48d4-844e-9e1cf3aa27d9': 'Accumulator',
@@ -71,7 +80,7 @@ const knownInspectionTypes = {
   'a54eb26f-89cc-4be1-a972-6f7b75c178d3': 'Brake Test'
 }
 
-const knownTeams = {
+const knownTeams: Record<string, string> = {
   '211c3377-b2b5-4c77-b67f-eae6d5a30a4b': 'FUF Racing',
   '3929d2e2-a89d-485b-85cc-0f6438194fe7': 'Poseidon Racing Team',
   '4ee7e73b-f319-49a5-a53f-87db0833dcfa': 'Aristotle Racing Team',
@@ -116,10 +125,10 @@ const knownTeams = {
               <div key={b.id} className="border rounded-lg px-5 py-4 bg-white shadow flex items-center justify-between">
                 <div>
                   <div className="font-bold">
-                    {knownInspectionTypes[b.inspection_type_id] ?? b.inspection_type_id ?? "Inspection"}
+                    {knownInspectionTypes[b.inspection_type_id] ?? b.inspection_type?.[0]?.name ?? "Inspection"} {/* Access first element */}
                   </div>
                   <div className="text-xs text-gray-500">
-                    {knownTeams[b.team_id] ?? b.team_id}
+                    {knownTeams[b.team_id] ?? b.team?.[0]?.name} {/* Access first element */}
                   </div>
                   <div className="text-xs">
                     Slot: {b.start_time}

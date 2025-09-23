@@ -4,20 +4,31 @@ import { useParams, useRouter } from 'next/navigation'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { FaRegCommentDots } from 'react-icons/fa'
 import { Loader2, CheckCircle, AlertCircle } from 'lucide-react'
+import { Database } from '@/lib/types/database'
+
+type Booking = Database['public']['Tables']['bookings']['Row'] & {
+  inspection_types?: { name: string } | null;
+  teams?: { name: string; code: string } | null;
+}
+type ChecklistTemplate = Database['public']['Tables']['checklist_templates']['Row']
+type InspectionProgress = Database['public']['Tables']['inspection_progress']['Row'] & {
+  user_profiles?: { first_name: string; last_name: string } | null;
+}
+type UserProfile = Database['public']['Tables']['user_profiles']['Row']
 
 export default function ChecklistRunnerPage() {
-  const { bookingId } = useParams()
+  const { bookingId } = useParams<{ bookingId: string }>()
   const router = useRouter()
-  const supabase = createClientComponentClient()
-  const [booking, setBooking] = useState(null)
-  const [checklist, setChecklist] = useState([])
-  const [status, setStatus] = useState({})
-  const [user, setUser] = useState(null)
-  const [commenting, setCommenting] = useState(null)
+  const supabase = createClientComponentClient<Database>()
+  const [booking, setBooking] = useState<Booking | null>(null)
+  const [checklist, setChecklist] = useState<ChecklistTemplate[]>([])
+  const [status, setStatus] = useState<Record<string, InspectionProgress>>({})
+  const [user, setUser] = useState<UserProfile | null>(null)
+  const [commenting, setCommenting] = useState<string | null>(null)
   const [commentDraft, setCommentDraft] = useState('')
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
+  const [error, setError] = useState<string | null>(null)
 
   // Load booking/user/checklist/progress
   useEffect(() => {
@@ -27,12 +38,16 @@ export default function ChecklistRunnerPage() {
         setError(null)
 
         // Get user
-        const { data: { user }, error: userError } = await supabase.auth.getUser()
+        const { data: { user: authUser }, error: userError } = await supabase.auth.getUser()
         if (userError) throw userError
-        setUser(user)
+        if (authUser) {
+          const { data: userProfile, error: profileError } = await supabase.from('user_profiles').select('*').eq('id', authUser.id).single()
+          if (profileError) throw profileError
+          setUser(userProfile)
+        }
 
         // Fetch booking with inspection type info
-        const { data: booking, error: bookingError } = await supabase
+        const { data: bookingData, error: bookingError } = await supabase
           .from('bookings')
           .select(`
             *,
@@ -43,13 +58,13 @@ export default function ChecklistRunnerPage() {
           .single()
         
         if (bookingError) throw bookingError
-        setBooking(booking)
+        setBooking(bookingData)
 
         // Fetch template items (corrected table and column names)
         const { data: items, error: itemsError } = await supabase
           .from('checklist_templates')
           .select('*')
-          .eq('inspection_type_id', booking?.inspection_type_id)
+          .eq('inspection_type_id', bookingData?.inspection_type_id || '')
           .order('section')
           .order('order_index')
         
@@ -67,11 +82,13 @@ export default function ChecklistRunnerPage() {
         
         if (progressError) throw progressError
         
-        const s = {}
-        for (const rec of progress) s[rec.item_id] = rec
+        const s: Record<string, InspectionProgress> = {}
+        for (const rec of progress ?? []) {
+          s[rec.item_id] = rec
+        }
         setStatus(s)
 
-      } catch (err) {
+      } catch (err: any) {
         console.error('Error loading checklist:', err)
         setError(err.message)
       } finally {
@@ -86,6 +103,7 @@ export default function ChecklistRunnerPage() {
     if (booking && booking.status && booking.status !== 'ongoing') {
       async function updateStatus() {
         try {
+          if (!booking) return // Add null check for booking
           const { error } = await supabase
             .from('bookings')
             .update({ status: 'ongoing' })
@@ -109,13 +127,13 @@ export default function ChecklistRunnerPage() {
   }, [booking, supabase])
 
   // Checkbox handler with retry logic
-  async function markItem(item_id, checked) {
+  async function markItem(item_id: string, checked: boolean) {
     const now = new Date().toISOString()
-    const current = status[item_id] || {}
-    const payload = {
+    const current = status[item_id] || {} as InspectionProgress
+    const payload: Partial<InspectionProgress> = {
       booking_id: bookingId,
       item_id,
-      user_id: user?.id,
+      user_id: user?.id || '',
       checked_at: checked ? now : null,
       status: checked ? 'pass' : null,
       comment: current.comment || '',
@@ -124,15 +142,15 @@ export default function ChecklistRunnerPage() {
     // Optimistic update
     setStatus((prev) => ({
       ...prev,
-      [item_id]: { ...current, ...payload }
+      [item_id]: { ...current, ...payload } as InspectionProgress
     }))
 
     setSaving(true)
     try {
       const { error } = await supabase
         .from('inspection_progress')
-        .upsert([payload], { 
-          onConflict: 'booking_id,item_id',
+        .upsert([payload as InspectionProgress], { 
+          onConflict: 'booking_id,item_id', // Changed to string
           ignoreDuplicates: false 
         })
       
@@ -151,17 +169,17 @@ export default function ChecklistRunnerPage() {
   }
 
   // Comment modal handlers
-  function openComment(item_id) {
+  function openComment(item_id: string) {
     setCommenting(item_id)
     setCommentDraft(status[item_id]?.comment || '')
   }
 
-  async function saveComment(item_id) {
+  async function saveComment(item_id: string) {
     const now = status[item_id]?.checked_at || null
-    const row = {
+    const row: Partial<InspectionProgress> = {
       booking_id: bookingId,
       item_id,
-      user_id: user?.id,
+      user_id: user?.id || '',
       checked_at: now,
       status: now ? 'pass' : null,
       comment: commentDraft
@@ -169,15 +187,15 @@ export default function ChecklistRunnerPage() {
 
     setStatus(prev => ({
       ...prev,
-      [item_id]: { ...(prev[item_id] || {}), ...row }
+      [item_id]: { ...(prev[item_id] || {} as InspectionProgress), ...row } as InspectionProgress
     }))
 
     setSaving(true)
     try {
       const { error } = await supabase
         .from('inspection_progress')
-        .upsert([row], { 
-          onConflict: 'booking_id,item_id',
+        .upsert([row as InspectionProgress], { 
+          onConflict: 'booking_id,item_id', // Changed to string
           ignoreDuplicates: false 
         })
       
@@ -198,7 +216,7 @@ export default function ChecklistRunnerPage() {
   const completionCount = checklist.filter(item => status[item.id]?.status === 'pass').length
 
   // Save failed/passed result
-  async function markInspectionComplete(passed) {
+  async function markInspectionComplete(passed: boolean) {
     if (passed && !allChecked) {
       alert('All checklist items must be completed before marking as passed')
       return
@@ -240,7 +258,7 @@ export default function ChecklistRunnerPage() {
   }
 
   // Group by section for rendering
-  const itemsBySection = {}
+  const itemsBySection: Record<string, ChecklistTemplate[]> = {}
   for (const item of checklist) {
     if (!itemsBySection[item.section]) itemsBySection[item.section] = []
     itemsBySection[item.section].push(item)
@@ -325,10 +343,10 @@ export default function ChecklistRunnerPage() {
                         <>
                           Checked by <b>
                             {status[item.id]?.user_profiles ? 
-                              `${status[item.id].user_profiles.first_name} ${status[item.id].user_profiles.last_name}` :
+                              `${status[item.id].user_profiles?.first_name} ${status[item.id].user_profiles?.last_name}` :
                               user?.email || user?.id
                             }
-                          </b> at {new Date(status[item.id].checked_at).toLocaleString()}<br />
+                          </b> at {new Date(status[item.id].checked_at as string).toLocaleString()}<br />
                         </>
                       )}
                       {status[item.id]?.comment && (

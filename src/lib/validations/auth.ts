@@ -4,7 +4,7 @@
 // =====================================================
 
 import { z } from 'zod'
-import { UserRole, VehicleClass } from '@/lib/types/database'
+import { UserRole } from '@/lib/types/database'
 
 // Registration form validation
 export const registerSchema = z.object({
@@ -18,7 +18,7 @@ export const registerSchema = z.object({
   emergencyContact: z.string().min(1, 'Emergency contact is required'),
   campsiteStaying: z.boolean(),
   ehicNumber: z.string().min(1, 'EHIC number is required'),
-  role: z.enum(['admin', 'scrutineer', 'team_leader', 'inspection_responsible', 'team_member', 'design_judge_software', 'design_judge_mechanical', 'design_judge_electronics', 'design_judge_overall', 'bp_judge', 'cm_judge', 'track_marshal', 'viewer'] as const),
+  role: z.enum(['admin', 'scrutineer', 'team_leader', 'inspection_responsible', 'team_member', 'design_judge_software', 'design_judge_mechanical', 'design_judge_electronics', 'design_judge_overall', 'bp_judge', 'cm_judge', 'track_marshal', 'viewer', 'engineering_design'] as const), // Added 'engineering_design'
 }).refine((data) => data.password === data.confirmPassword, {
   message: "Passwords don't match",
   path: ["confirmPassword"],

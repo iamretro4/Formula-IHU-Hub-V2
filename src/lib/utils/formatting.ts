@@ -1,5 +1,5 @@
 // src/lib/utils/formatting.ts
-import { UserRole, VehicleClass } from '@/lib/types/database'
+import { UserRole } from '@/lib/types/database'
 
 // Format user roles for display
 export function formatUserRole(role: UserRole): string {
@@ -15,6 +15,7 @@ export function formatUserRole(role: UserRole): string {
     design_judge_overall: 'Design Judge - Overall',
     bp_judge: 'Business Plan Judge',
     cm_judge: 'Cost & Manufacturing Judge',
+    engineering_design: 'Engineering Design Judge', // Added this entry
     track_marshal: 'Track Marshal',
     viewer: 'Viewer',
   }
@@ -23,7 +24,7 @@ export function formatUserRole(role: UserRole): string {
 }
 
 // Format vehicle class for display
-export function formatVehicleClass(vehicleClass: VehicleClass): string {
+export function formatVehicleClass(vehicleClass: string): string { // Changed to string as VehicleClass enum is not explicitly defined
   return vehicleClass === 'EV' ? 'Electric Vehicle' : 'Combustion Vehicle'
 }
 

@@ -43,18 +43,12 @@ const navConfig: NavSection[] = [
     ]
   },
  {
-  label: 'JUDGED EVENTS',
-  items: [
-    { label: 'Design Leaderboard', href: '/judged-events/engineering-design/results', icon: <FaBook /> },
-    { label: 'Business Plan Leaderboard', href: '/judged-events/business-plan/results', icon: <FaCogs /> },
-    { label: 'Cost & Manufacturing Leaderboard', href: '/judged-events/cost-manufacturing/results', icon: <FaHistory /> },
-    { label: 'Multi-Event Summary', href: '/judged-events/summary', icon: <FaChartBar /> },
-    { label: 'Design Admin', href: '/judged-events/engineering-design/admin', icon: <FaUsersCog />, roles: ['admin'] },
-    { label: 'Business Admin', href: '/judged-events/business-plan/admin', icon: <FaUsersCog />, roles: ['admin'] },
-    { label: 'Cost Admin', href: '/judged-events/cost-manufacturing/admin', icon: <FaUsersCog />, roles: ['admin'] },
-    { label: 'Advanced Admin Panel', href: '/judged-events/engineering-design/admin/advanced', icon: <FaGavel />, roles: ['admin'] },
-    // Add similar links for other event advanced panels if needed
-  ]
+    label: 'JUDGED EVENTS',
+    items: [
+      { label: 'Design Event', href: '/judged-events/engineering-design', icon: <FaBook />, roles: ['admin', 'design_judge_software', 'design_judge_mechanical', 'design_judge_electronics', 'design_judge_overall'] },
+      { label: 'Business Plan', href: '/judged-events/business-plan', icon: <FaCogs />, roles: ['admin', 'bp_judge'] },
+      { label: 'Cost & Manufacturing', href: '/judged-events/cost-manufacturing', icon: <FaHistory />, roles: ['admin', 'cm_judge'] },
+    ]
 },
   {
     label: 'TEAM FEATURES',
@@ -143,3 +137,5 @@ export default function Sidebar() {
     </aside>
   )
 }
+
+

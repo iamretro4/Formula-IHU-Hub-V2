@@ -2,9 +2,16 @@
 import { useEffect, useState } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { Database } from '@/lib/types/database'
 
-function getSlots(startTime, endTime, duration) {
-  const slots = []
+type InspectionType = Database['public']['Tables']['inspection_types']['Row']
+type Booking = Database['public']['Tables']['bookings']['Row'] & {
+  team?: { name: string }[] | null; // Changed to array
+  inspection_type?: { name: string }[] | null; // Changed to array
+}
+
+function getSlots(startTime: string, endTime: string, duration: number) {
+  const slots: string[] = []
   let [h, m] = startTime.split(':').map(Number)
   let end = parseInt(endTime.split(':')[0]) * 60 + parseInt(endTime.split(':')[1])
   let minutes = h * 60 + m
@@ -18,12 +25,12 @@ function getSlots(startTime, endTime, duration) {
 }
 
 export default function ScrutineeringCalendarGrid() {
-  const [inspectionTypes, setInspectionTypes] = useState([])
-  const [allBookings, setAllBookings] = useState([])
-  const [userRole, setUserRole] = useState('')
-  const [teamId, setTeamId] = useState(null)
+  const [inspectionTypes, setInspectionTypes] = useState<InspectionType[]>([])
+  const [allBookings, setAllBookings] = useState<Booking[]>([])
+  const [userRole, setUserRole] = useState<string>('')
+  const [teamId, setTeamId] = useState<string | null>(null)
   const [today, setToday] = useState(() => new Date().toISOString().split('T')[0])
-  const supabase = createClientComponentClient()
+  const supabase = createClientComponentClient<Database>()
 
   useEffect(() => {
     let active = true
@@ -41,16 +48,17 @@ export default function ScrutineeringCalendarGrid() {
       // Inspection types
       const { data: types } = await supabase
         .from('inspection_types')
-        .select('id, name, duration, duration_minutes, slot_count, sort_order')
+        .select('id, name, duration, duration_minutes, slot_count, requirements, sort_order, active, description, concurrent_slots, prerequisites, created_at, key') // Fetch all fields
         .order('sort_order')
       setInspectionTypes(types ?? [])
       // All bookings (with team+type name)
       const { data: bookings } = await supabase
         .from('bookings')
         .select(`
-          id, inspection_type_id, team_id, start_time, end_time, resource_index, status,
+          id, inspection_type_id, team_id, start_time, end_time, resource_index, status, date, is_rescrutineering,
+          priority_level, notes, created_by, created_at, updated_at, inspection_status, assigned_scrutineer_id, started_at, completed_at,
           team:teams(name), inspection_type:inspection_types(name)
-        `)
+        `) // Fetch all fields
         .eq('date', today)
       setAllBookings(bookings ?? [])
     })()
@@ -58,7 +66,7 @@ export default function ScrutineeringCalendarGrid() {
   }, [supabase, today])
 
   // Build grid
-  const gridByType = inspectionTypes.reduce((acc, type) => {
+  const gridByType: Record<string, { time: string; booking: Booking | undefined }[]> = inspectionTypes.reduce((acc: Record<string, { time: string; booking: Booking | undefined }[]>, type: InspectionType) => {
     const dur = Number(type.duration ?? type.duration_minutes ?? 120)
     acc[type.id] = getSlots('09:00', '19:00', dur).map(time => {
       const found = allBookings.find(
@@ -100,19 +108,19 @@ export default function ScrutineeringCalendarGrid() {
                   {gridByType[inspectionTypes[0].id][rowIdx].time}
                 </td>
                 {inspectionTypes.map(type => {
-                  const slot = gridByType[type.id][rowIdx]
+                  const slot = gridByType[type.id]?.[rowIdx]
                   const isBooked = !!slot?.booking
                   return (
                     <td key={type.id} className="border px-3 py-2 text-center align-middle">
                       {isBooked ? (
                         <Badge className="bg-red-50 text-red-800 border border-red-300 whitespace-pre-line">
                           Reserved
-                          {(userRole === 'admin' || slot.booking.team_id === teamId) && (
+                          {(userRole === 'admin' || slot.booking?.team_id === teamId) && (
                             <span className="block text-xs font-normal">
                               {" "}
                               {userRole === "admin"
-                                ? `(${slot.booking.team?.name ?? "Team"})`
-                                : slot.booking.team_id === teamId
+                                ? `(${slot.booking?.team?.[0]?.name ?? "Team"})` // Access first element
+                                : slot.booking?.team_id === teamId
                                 ? " (Your team)" : ""}
                             </span>
                           )}
@@ -143,8 +151,8 @@ export default function ScrutineeringCalendarGrid() {
           <div key={b.id} className="border rounded-lg bg-white p-4 flex justify-between items-center shadow">
             <div>
               <div className="font-bold">
-                {b.inspection_type?.name ?? "Inspection"}
-                <span className="font-medium text-gray-600 ml-2">({b.team?.name})</span>
+                {b.inspection_type?.[0]?.name ?? "Inspection"} {/* Access first element */}
+                <span className="font-medium text-gray-600 ml-2">({b.team?.[0]?.name})</span> {/* Access first element */}
               </div>
               <div className="text-gray-500 text-sm">
                 {b.start_time} – {b.end_time}, Lane {b.resource_index}
