@@ -1,23 +1,33 @@
 'use client'
+
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { createBrowserClient } from '@supabase/ssr'
+
 import {
   FaTachometerAlt, FaTrophy, FaCalendarAlt, FaCheckCircle, FaList,
   FaTasks, FaChartBar, FaClipboardCheck, FaUser, FaSignOutAlt, FaCogs,
   FaUsers, FaGavel, FaBook, FaHistory, FaUsersCog, FaCommentDots
 } from 'react-icons/fa'
 
+type NavItem = {
+  label: string
+  href: string
+  icon: React.ReactNode
+  roles?: string[]
+}
+
 type NavSection = {
   label: string
-  items: {
-    label: string,
-    href: string,
-    icon: React.ReactNode,
-    roles?: string[]
-  }[]
+  items: NavItem[]
 }
+
+// ✅ create supabase browser client once
+const supabase = createBrowserClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+)
 
 const navConfig: NavSection[] = [
   {
@@ -42,14 +52,14 @@ const navConfig: NavSection[] = [
       { label: 'Live Track Data', href: '/track/data', icon: <FaChartBar /> }
     ]
   },
- {
+  {
     label: 'JUDGED EVENTS',
     items: [
       { label: 'Design Event', href: '/judged-events/engineering-design', icon: <FaBook />, roles: ['admin', 'design_judge_software', 'design_judge_mechanical', 'design_judge_electronics', 'design_judge_overall'] },
       { label: 'Business Plan', href: '/judged-events/business-plan', icon: <FaCogs />, roles: ['admin', 'bp_judge'] },
       { label: 'Cost & Manufacturing', href: '/judged-events/cost-manufacturing', icon: <FaHistory />, roles: ['admin', 'cm_judge'] },
     ]
-},
+  },
   {
     label: 'TEAM FEATURES',
     items: [
@@ -77,8 +87,8 @@ const navConfig: NavSection[] = [
 export default function Sidebar() {
   const pathname = usePathname()
   const [role, setRole] = useState<string | null>(null)
-  const [profile, setProfile] = useState<any>(null)
-  const supabase = createClientComponentClient()
+  const [profile, setProfile] = useState<{ first_name?: string, last_name?: string } | null>(null)
+
   useEffect(() => {
     let active = true
     ;(async () => {
@@ -96,11 +106,12 @@ export default function Sidebar() {
       }
     })()
     return () => { active = false }
-  }, [supabase])
+  }, [])
+
   return (
     <aside className="h-full w-64 flex-shrink-0 border-r bg-white dark:bg-neutral-900 flex flex-col">
       <div className="px-6 py-5 flex items-center gap-2 border-b">
-        <span className="text-2xl"><span role="img" aria-label="flag">🏁</span></span>
+        <span className="text-2xl">🏁</span>
         <div>
           <div className="font-bold text-lg">Formula IHU</div>
           <div className="text-xs text-gray-500">Competition Hub</div>
@@ -128,7 +139,9 @@ export default function Sidebar() {
         ))}
       </nav>
       <div className="p-4 mt-auto flex items-center gap-2 border-t">
-        <div className="rounded-full h-8 w-8 bg-gray-200 flex items-center justify-center text-base font-bold">{profile?.first_name?.[0] ?? '?'}</div>
+        <div className="rounded-full h-8 w-8 bg-gray-200 flex items-center justify-center text-base font-bold">
+          {profile?.first_name?.[0] ?? '?'}
+        </div>
         <div>
           <div className="text-xs font-semibold">{profile?.first_name} {profile?.last_name}</div>
           <div className="text-xs text-gray-500 capitalize">{role}</div>
@@ -137,5 +150,3 @@ export default function Sidebar() {
     </aside>
   )
 }
-
-

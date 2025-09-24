@@ -1,15 +1,43 @@
 // src/lib/supabase/server.ts
-import { createRouteHandlerClient, createMiddlewareClient } from '@supabase/auth-helpers-nextjs'
-import { cookies, headers } from 'next/headers'
+import { cookies } from 'next/headers'
 import type { NextRequest } from 'next/server'
 import type { Database } from '@/lib/types/database'
 
-// For API route handlers (e.g., callback)
-export function createRouteHandlerSupabaseClient() {
-  return createRouteHandlerClient<Database>({ cookies })
+// Import from @supabase/ssr (new package replacing auth-helpers)
+import { 
+  createBrowserClient, 
+  createServerClient, 
+  createMiddlewareClient 
+} from '@supabase/ssr'
+
+// ----------
+// Client-side (for components)
+// ----------
+export function createClientSupabase() {
+  return createBrowserClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
 }
 
-// For middleware
+// ----------
+// Server-side (for RSC, API routes)
+// ----------
+export function createServerSupabase() {
+  return createServerClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { cookies }
+  )
+}
+
+// ----------
+// Middleware (for edge/middleware.ts)
+// ----------
 export function createMiddlewareSupabaseClient(req: NextRequest, res: any) {
-  return createMiddlewareClient<Database>({ req, res })
+  return createMiddlewareClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { req, res }
+  )
 }

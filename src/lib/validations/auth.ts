@@ -1,36 +1,49 @@
 // =====================================================
-// Formula IHU Hub - Authentication Validation Schema
-// File: src/lib/validations/auth.ts
+// Formula IHU Hub - Authentication & Validation
+// File: src/lib/auth.ts
 // =====================================================
 
-import { z } from 'zod'
-import { UserRole } from '@/lib/types/database'
+import { z } from "zod"
+import type { NextAuthOptions } from "next-auth"
+import CredentialsProvider from "next-auth/providers/credentials"
 
-// Registration form validation
-export const registerSchema = z.object({
-  email: z.string().email('Please enter a valid email address'),
-  password: z.string().min(8, 'Password must be at least 8 characters'),
-  confirmPassword: z.string(),
-  firstName: z.string().min(1, 'First name is required'),
-  lastName: z.string().min(1, 'Last name is required'),
-  fatherName: z.string().min(1, 'Father name is required'),
-  phone: z.string().min(1, 'Phone number is required'),
-  emergencyContact: z.string().min(1, 'Emergency contact is required'),
-  campsiteStaying: z.boolean(),
-  ehicNumber: z.string().min(1, 'EHIC number is required'),
-  role: z.enum(['admin', 'scrutineer', 'team_leader', 'inspection_responsible', 'team_member', 'design_judge_software', 'design_judge_mechanical', 'design_judge_electronics', 'design_judge_overall', 'bp_judge', 'cm_judge', 'track_marshal', 'viewer', 'engineering_design'] as const), // Added 'engineering_design'
-}).refine((data) => data.password === data.confirmPassword, {
-  message: "Passwords don't match",
-  path: ["confirmPassword"],
-})
+// ------------------------------------
+// Role definitions
+// ------------------------------------
+const userRoles = [
+  "admin", "scrutineer", "team_leader", "inspection_responsible", "team_member",
+  "design_judge_software", "design_judge_mechanical", "design_judge_electronics",
+  "design_judge_overall", "bp_judge", "cm_judge", "track_marshal", "viewer",
+  "engineering_design",
+] as const
 
-// Login form validation
+// ------------------------------------
+// Zod schemas
+// ------------------------------------
+export const registerSchema = z
+  .object({
+    email: z.string().email("Please enter a valid email address"),
+    password: z.string().min(8, "Password must be at least 8 characters"),
+    confirmPassword: z.string(),
+    firstName: z.string().min(1, "First name is required"),
+    lastName: z.string().min(1, "Last name is required"),
+    fatherName: z.string().min(1, "Father name is required"),
+    phone: z.string().min(1, "Phone number is required"),
+    emergencyContact: z.string().min(1, "Emergency contact is required"),
+    campsiteStaying: z.boolean(),
+    ehicNumber: z.string().min(1, "EHIC number is required"),
+    role: z.enum(userRoles),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "Passwords don't match",
+    path: ["confirmPassword"],
+  })
+
 export const loginSchema = z.object({
-  email: z.string().email('Please enter a valid email address'),
-  password: z.string().min(1, 'Password is required'),
+  email: z.string().email("Please enter a valid email address"),
+  password: z.string().min(1, "Password is required"),
 })
 
-// Profile completion validation
 export const profileCompletionSchema = z.object({
   teamId: z.string().uuid().optional(),
   additionalInfo: z.string().optional(),
@@ -39,3 +52,44 @@ export const profileCompletionSchema = z.object({
 export type RegisterFormData = z.infer<typeof registerSchema>
 export type LoginFormData = z.infer<typeof loginSchema>
 export type ProfileCompletionData = z.infer<typeof profileCompletionSchema>
+
+// ------------------------------------
+// NextAuth config
+// ------------------------------------
+export const authOptions: NextAuthOptions = {
+  providers: [
+    CredentialsProvider({
+      name: "Credentials",
+      credentials: {
+        email: { label: "Email", type: "text" },
+        password: { label: "Password", type: "password" },
+      },
+      async authorize(credentials) {
+        // ⚠️ Replace with your own login logic
+        if (
+          credentials?.email === "admin@formula-ihu.com" &&
+          credentials?.password === "password123"
+        ) {
+          return { id: "1", email: credentials.email, role: "admin" }
+        }
+        return null
+      },
+    }),
+  ],
+  pages: {
+    signIn: "/login",
+  },
+  session: {
+    strategy: "jwt",
+  },
+  callbacks: {
+    async jwt({ token, user }) {
+      if (user) token.role = (user as any).role
+      return token
+    },
+    async session({ session, token }) {
+      if (token) (session.user as any).role = token.role
+      return session
+    },
+  },
+}
